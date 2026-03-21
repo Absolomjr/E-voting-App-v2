@@ -3,6 +3,7 @@ from collections import defaultdict
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
+from rest_framework.exceptions import ValidationError
 
 from audit.services import AuditService
 from elections.models import Candidate, Poll, PollPosition
@@ -23,7 +24,7 @@ class VoteCastingService:
         ).get(pk=poll_id)
 
         if Vote.objects.filter(voter=voter, poll=poll).exists():
-            raise ValueError("You have already voted in this poll.")
+            raise ValidationError("You have already voted in this poll.")
 
         self._validate_poll_eligibility(voter, poll)
 
@@ -54,19 +55,19 @@ class VoteCastingService:
 
     def _validate_poll_eligibility(self, voter, poll):
         if poll.status != Poll.Status.OPEN:
-            raise ValueError("This poll is not currently open for voting.")
+            raise ValidationError("This poll is not currently open for voting.")
 
         if not poll.stations.filter(pk=voter.voter_profile.station_id).exists():
-            raise ValueError("Your station is not assigned to this poll.")
+            raise ValidationError("Your station is not assigned to this poll.")
 
     def _validate_position_vote(self, poll_position, poll, vote_item):
         if poll_position.poll_id != poll.id:
-            raise ValueError(
+            raise ValidationError(
                 f"Position {poll_position.id} does not belong to this poll."
             )
         if not vote_item.get("abstain") and vote_item.get("candidate_id"):
             if not poll_position.candidates.filter(pk=vote_item["candidate_id"]).exists():
-                raise ValueError(
+                raise ValidationError(
                     f"Candidate {vote_item['candidate_id']} is not assigned to this position."
                 )
 
