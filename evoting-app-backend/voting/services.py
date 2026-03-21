@@ -22,6 +22,9 @@ class VoteCastingService:
             "poll_positions__candidates", "stations"
         ).get(pk=poll_id)
 
+        if Vote.objects.filter(voter=voter, poll=poll).exists():
+            raise ValueError("You have already voted in this poll.")
+
         self._validate_poll_eligibility(voter, poll)
 
         created_votes = []
@@ -70,32 +73,27 @@ class VoteCastingService:
 
 class VoteHistoryService:
     def get_voter_history(self, voter):
-        voted_poll_ids = (
-            Vote.objects.filter(voter=voter)
-            .values_list("poll_id", flat=True)
-            .distinct()
-        )
-        polls = Poll.objects.filter(pk__in=voted_poll_ids)
-        history = []
-        for poll in polls:
-            positions = []
-            votes = Vote.objects.filter(voter=voter, poll=poll).select_related(
-                "poll_position__position", "candidate"
-            )
-            for vote in votes:
-                positions.append({
-                    "position_title": vote.poll_position.position.title,
-                    "candidate_name": vote.candidate.full_name if vote.candidate else None,
-                    "abstained": vote.abstained,
-                })
-            history.append({
-                "poll_id": poll.id,
-                "poll_title": poll.title,
-                "poll_status": poll.status,
-                "election_type": poll.election_type,
-                "positions": positions,
+        votes = Vote.objects.filter(voter=voter).select_related(
+            "poll_position__position", "candidate", "poll"
+        ).order_by("-poll__created_at")
+        
+        history_map = {}
+        for vote in votes:
+            poll = vote.poll
+            if poll.id not in history_map:
+                history_map[poll.id] = {
+                    "poll_id": poll.id,
+                    "poll_title": poll.title,
+                    "poll_status": poll.status,
+                    "election_type": poll.election_type,
+                    "positions": [],
+                }
+            history_map[poll.id]["positions"].append({
+                "position_title": vote.poll_position.position.title,
+                "candidate_name": vote.candidate.full_name if vote.candidate else None,
+                "abstained": vote.abstained,
             })
-        return history
+        return list(history_map.values())
 
 
 class ResultsService:

@@ -1,3 +1,4 @@
+from datetime import date
 from django.db import transaction
 
 from audit.services import AuditService
@@ -48,11 +49,19 @@ class CandidateService:
         if education := query_params.get("education"):
             qs = qs.filter(education=education)
         if min_age := query_params.get("min_age"):
-            qs = [c for c in qs if c.age >= int(min_age)]
-            return qs
+            # Born on or before today - min_age years
+            try:
+                cutoff = date.today().replace(year=date.today().year - int(min_age))
+            except ValueError:
+                cutoff = date.today().replace(year=date.today().year - int(min_age), month=2, day=28)
+            qs = qs.filter(date_of_birth__lte=cutoff)
         if max_age := query_params.get("max_age"):
-            qs = [c for c in qs if c.age <= int(max_age)]
-            return qs
+            # Born after today - (max_age + 1) years
+            try:
+                cutoff = date.today().replace(year=date.today().year - (int(max_age) + 1))
+            except ValueError:
+                cutoff = date.today().replace(year=date.today().year - (int(max_age) + 1), month=2, day=28)
+            qs = qs.filter(date_of_birth__gt=cutoff)
         return qs
 
 
@@ -196,6 +205,10 @@ class PollService:
                 )
                 if not has_candidates:
                     raise ValueError("Cannot open - no candidates assigned.")
+            
+            if poll.end_date < date.today():
+                raise ValueError("Cannot open/reopen a poll whose end date has passed.")
+            
             poll.status = Poll.Status.OPEN
             log_action = "OPEN_POLL" if poll.status == Poll.Status.DRAFT else "REOPEN_POLL"
         elif action == "close":
