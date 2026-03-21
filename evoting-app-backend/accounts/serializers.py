@@ -23,7 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "date_joined"]
 
     def get_full_name(self, obj):
-        return obj.get_full_name()
+        return obj.first_name + " " + obj.last_name
 
 
 class VoterProfileSerializer(serializers.ModelSerializer):
@@ -62,11 +62,6 @@ class VoterRegistrationSerializer(serializers.Serializer):
     password = serializers.CharField(min_length=6, write_only=True)
     confirm_password = serializers.CharField(min_length=6, write_only=True)
 
-    def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return value
-
     def validate_national_id(self, value):
         if VoterProfile.objects.filter(national_id=value).exists():
             raise serializers.ValidationError("A voter with this National ID already exists.")
@@ -74,7 +69,7 @@ class VoterRegistrationSerializer(serializers.Serializer):
 
     def validate_date_of_birth(self, value):
         today = date.today()
-        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        age = today.year - value.year
         if age < 18:
             raise serializers.ValidationError(
                 "You must be at least 18 years old."

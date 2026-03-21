@@ -20,7 +20,6 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "corsheaders", 
     "rest_framework",
     "rest_framework_simplejwt",
     "accounts",
@@ -30,7 +29,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -41,7 +39,6 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "evoting.urls"
-APPEND_SLASH = False
 
 TEMPLATES = [
     {
@@ -123,10 +120,3 @@ REQUIRED_EDUCATION_LEVELS = [
     ("phd", "PhD"),
     ("doctorate", "Doctorate"),
 ]
-# CORS Configuration (Allow Frontend)
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
-CORS_ALLOW_CREDENTIALS = True

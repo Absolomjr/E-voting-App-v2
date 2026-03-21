@@ -65,7 +65,7 @@ class CandidateCreateSerializer(serializers.ModelSerializer):
 
     def validate_date_of_birth(self, value):
         today = date.today()
-        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
+        age = today.year - value.year
         if age < settings.MIN_CANDIDATE_AGE:
             raise serializers.ValidationError(
                 f"Candidate must be at least {settings.MIN_CANDIDATE_AGE} years old."
