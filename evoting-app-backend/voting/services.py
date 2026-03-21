@@ -3,6 +3,7 @@ from collections import defaultdict
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Q
+from rest_framework.exceptions import ValidationError
 
 from audit.services import AuditService
 from elections.models import Candidate, Poll, PollPosition
@@ -21,6 +22,9 @@ class VoteCastingService:
         poll = Poll.objects.prefetch_related(
             "poll_positions__candidates", "stations"
         ).get(pk=poll_id)
+
+        if Vote.objects.filter(voter=voter, poll=poll).exists():
+            raise ValidationError("You have already voted in this poll.")
 
         self._validate_poll_eligibility(voter, poll)
 
@@ -51,51 +55,46 @@ class VoteCastingService:
 
     def _validate_poll_eligibility(self, voter, poll):
         if poll.status != Poll.Status.OPEN:
-            raise ValueError("This poll is not currently open for voting.")
+            raise ValidationError("This poll is not currently open for voting.")
 
         if not poll.stations.filter(pk=voter.voter_profile.station_id).exists():
-            raise ValueError("Your station is not assigned to this poll.")
+            raise ValidationError("Your station is not assigned to this poll.")
 
     def _validate_position_vote(self, poll_position, poll, vote_item):
         if poll_position.poll_id != poll.id:
-            raise ValueError(
+            raise ValidationError(
                 f"Position {poll_position.id} does not belong to this poll."
             )
         if not vote_item.get("abstain") and vote_item.get("candidate_id"):
             if not poll_position.candidates.filter(pk=vote_item["candidate_id"]).exists():
-                raise ValueError(
+                raise ValidationError(
                     f"Candidate {vote_item['candidate_id']} is not assigned to this position."
                 )
 
 
 class VoteHistoryService:
     def get_voter_history(self, voter):
-        voted_poll_ids = (
-            Vote.objects.filter(voter=voter)
-            .values_list("poll_id", flat=True)
-            .distinct()
-        )
-        polls = Poll.objects.filter(pk__in=voted_poll_ids)
-        history = []
-        for poll in polls:
-            positions = []
-            votes = Vote.objects.filter(voter=voter, poll=poll).select_related(
-                "poll_position__position", "candidate"
-            )
-            for vote in votes:
-                positions.append({
-                    "position_title": vote.poll_position.position.title,
-                    "candidate_name": vote.candidate.full_name if vote.candidate else None,
-                    "abstained": vote.abstained,
-                })
-            history.append({
-                "poll_id": poll.id,
-                "poll_title": poll.title,
-                "poll_status": poll.status,
-                "election_type": poll.election_type,
-                "positions": positions,
+        votes = Vote.objects.filter(voter=voter).select_related(
+            "poll_position__position", "candidate", "poll"
+        ).order_by("-poll__created_at")
+        
+        history_map = {}
+        for vote in votes:
+            poll = vote.poll
+            if poll.id not in history_map:
+                history_map[poll.id] = {
+                    "poll_id": poll.id,
+                    "poll_title": poll.title,
+                    "poll_status": poll.status,
+                    "election_type": poll.election_type,
+                    "positions": [],
+                }
+            history_map[poll.id]["positions"].append({
+                "position_title": vote.poll_position.position.title,
+                "candidate_name": vote.candidate.full_name if vote.candidate else None,
+                "abstained": vote.abstained,
             })
-        return history
+        return list(history_map.values())
 
 
 class ResultsService:
