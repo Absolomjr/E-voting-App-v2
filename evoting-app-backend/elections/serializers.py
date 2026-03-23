@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 
 from django.conf import settings
 from rest_framework import serializers
@@ -65,7 +65,7 @@ class CandidateCreateSerializer(serializers.ModelSerializer):
 
     def validate_date_of_birth(self, value):
         today = date.today()
-        age = today.year - value.year
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
         if age < settings.MIN_CANDIDATE_AGE:
             raise serializers.ValidationError(
                 f"Candidate must be at least {settings.MIN_CANDIDATE_AGE} years old."
@@ -116,7 +116,7 @@ class PositionCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_max_winners(self, value):
-        if value < 0:
+        if value < 1:
             raise serializers.ValidationError("Must be at least 1.")
         return value
 
@@ -161,7 +161,7 @@ class PollCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"end_date": "End date must be after start date."})
         invalid_positions = set(data["position_ids"]) - set(
             Position.objects.filter(
-                pk__in=data["position_ids"]
+                pk__in=data["position_ids"], is_active=True
             ).values_list("pk", flat=True)
         )
         if invalid_positions:

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -18,7 +18,6 @@ class UserSerializer(serializers.ModelSerializer):
         fields = [
             "id", "username", "email", "first_name", "last_name",
             "full_name", "role", "is_active", "is_verified", "date_joined",
-            "password",
         ]
         read_only_fields = ["id", "date_joined"]
 
@@ -69,7 +68,7 @@ class VoterRegistrationSerializer(serializers.Serializer):
 
     def validate_date_of_birth(self, value):
         today = date.today()
-        age = today.year - value.year
+        age = today.year - value.year - ((today.month, today.day) < (value.month, value.day))
         if age < 18:
             raise serializers.ValidationError(
                 "You must be at least 18 years old."
@@ -77,7 +76,7 @@ class VoterRegistrationSerializer(serializers.Serializer):
         return value
 
     def validate_station_id(self, value):
-        if not VotingStation.objects.filter(pk=value).exists():
+        if not VotingStation.objects.filter(pk=value, is_active=True).exists():
             raise serializers.ValidationError("Invalid or inactive voting station.")
         return value
 

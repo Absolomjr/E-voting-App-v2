@@ -17,6 +17,10 @@ class CastVoteSerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     "Cannot both abstain and select a candidate."
                 )
+            if not item.get("abstain") and not item.get("candidate_id"):
+                raise serializers.ValidationError(
+                    "A candidate must be selected when abstain is false."
+                )
         return value
 
 

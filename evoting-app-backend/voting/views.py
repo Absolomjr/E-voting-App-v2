@@ -1,10 +1,11 @@
+from django.db.utils import IntegrityError
 from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.permissions import IsAdminOrReadOnlyVoter, IsAdminUser, IsVerifiedVoter
-from elections.models import Poll
+from elections.models import Poll, PollPosition
 from voting.serializers import CastVoteSerializer
 from voting.services import (
     ResultsService,
@@ -79,7 +80,7 @@ class CastVoteView(APIView):
         service = VoteCastingService()
         try:
             votes = service.cast(request.user, serializer.validated_data)
-        except (ValueError, Poll.DoesNotExist) as e:
+        except (ValueError, Poll.DoesNotExist, PollPosition.DoesNotExist, IntegrityError) as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         vote_hash = votes[0].vote_hash if votes else ""

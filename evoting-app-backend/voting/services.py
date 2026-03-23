@@ -2,7 +2,8 @@ from collections import defaultdict
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.utils import IntegrityError
+from django.db.models import Count
 
 from audit.services import AuditService
 from elections.models import Candidate, Poll, PollPosition
@@ -26,7 +27,12 @@ class VoteCastingService:
 
         created_votes = []
         for vote_item in validated_data["votes"]:
-            pp = PollPosition.objects.get(pk=vote_item["poll_position_id"])
+            try:
+                pp = PollPosition.objects.get(pk=vote_item["poll_position_id"])
+            except PollPosition.DoesNotExist as exc:
+                raise ValueError(
+                    f"Position {vote_item['poll_position_id']} does not exist."
+                ) from exc
             self._validate_position_vote(pp, poll, vote_item)
 
             vote = Vote(
@@ -38,7 +44,12 @@ class VoteCastingService:
             )
             if not vote.abstained:
                 vote.candidate_id = vote_item["candidate_id"]
-            vote.save()
+            try:
+                vote.save()
+            except IntegrityError as exc:
+                raise ValueError(
+                    "Duplicate or invalid vote submission for this poll position."
+                ) from exc
             created_votes.append(vote)
 
         vote_hash = created_votes[0].vote_hash if created_votes else ""

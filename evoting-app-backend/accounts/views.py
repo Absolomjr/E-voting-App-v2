@@ -5,13 +5,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.permissions import IsAdminUser, IsSuperAdmin
+from accounts.permissions import IsAdminUser, IsSuperAdmin, IsVerifiedVoter
 from accounts.serializers import (
     AdminCreateSerializer,
     AdminListSerializer,
     AdminLoginSerializer,
     ChangePasswordSerializer,
-    UserSerializer,
     VoterListSerializer,
     VoterLoginSerializer,
     VoterProfileSerializer,
@@ -108,7 +107,7 @@ class VoterRegistrationView(APIView):
 
 
 class VoterProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsVerifiedVoter]
 
     def get(self, request):
         serializer = VoterProfileSerializer(request.user.voter_profile)
@@ -149,7 +148,10 @@ class VoterVerifyView(APIView):
 
     def post(self, request, pk):
         service = VoterManagementService()
-        service.verify(pk, request.user)
+        try:
+            service.verify(pk, request.user)
+        except User.DoesNotExist:
+            return Response({"detail": "Voter not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response({"detail": "Voter verified successfully."})
 
 

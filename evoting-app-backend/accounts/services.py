@@ -138,7 +138,7 @@ class VoterManagementService:
         self._audit = AuditService()
 
     def verify(self, voter_id, verified_by):
-        user = User.objects.get(pk=voter_id)
+        user = User.objects.get(pk=voter_id, role=User.Role.VOTER)
         user.is_verified = True
         user.save(update_fields=["is_verified"])
         self._audit.log(
@@ -149,7 +149,10 @@ class VoterManagementService:
         return user
 
     def verify_all_pending(self, verified_by):
-        unverified = User.objects.filter(is_verified=False)
+        unverified = User.objects.filter(
+            role=User.Role.VOTER,
+            is_verified=False,
+        )
         count = unverified.update(is_verified=True)
         self._audit.log(
             "VERIFY_ALL_VOTERS",

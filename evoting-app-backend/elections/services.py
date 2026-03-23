@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.db import transaction
 
 from audit.services import AuditService
@@ -48,11 +50,13 @@ class CandidateService:
         if education := query_params.get("education"):
             qs = qs.filter(education=education)
         if min_age := query_params.get("min_age"):
-            qs = [c for c in qs if c.age >= int(min_age)]
-            return qs
+            qs = qs.filter(
+                date_of_birth__lte=date.today().replace(year=date.today().year - int(min_age))
+            )
         if max_age := query_params.get("max_age"):
-            qs = [c for c in qs if c.age <= int(max_age)]
-            return qs
+            qs = qs.filter(
+                date_of_birth__gte=date.today().replace(year=date.today().year - int(max_age) - 1)
+            )
         return qs
 
 
@@ -186,18 +190,24 @@ class PollService:
 
     def toggle_status(self, poll_id, action, toggled_by):
         poll = Poll.objects.prefetch_related("poll_positions__candidates").get(pk=poll_id)
+        current_status = poll.status
 
         if action == "open":
-            if poll.status not in (Poll.Status.DRAFT, Poll.Status.CLOSED):
+            if current_status not in (Poll.Status.DRAFT, Poll.Status.CLOSED):
                 raise ValueError(f"Cannot open a poll with status: {poll.status}")
-            if poll.status == Poll.Status.DRAFT:
-                has_candidates = any(
-                    pp.candidates.exists() for pp in poll.poll_positions.all()
+            if current_status == Poll.Status.DRAFT:
+                poll_positions = list(poll.poll_positions.all())
+                if not poll_positions:
+                    raise ValueError("Cannot open - no positions configured.")
+                has_unassigned_positions = any(
+                    not pp.candidates.exists() for pp in poll_positions
                 )
-                if not has_candidates:
-                    raise ValueError("Cannot open - no candidates assigned.")
+                if has_unassigned_positions:
+                    raise ValueError(
+                        "Cannot open - each poll position must have at least one candidate assigned."
+                    )
             poll.status = Poll.Status.OPEN
-            log_action = "OPEN_POLL" if poll.status == Poll.Status.DRAFT else "REOPEN_POLL"
+            log_action = "OPEN_POLL" if current_status == Poll.Status.DRAFT else "REOPEN_POLL"
         elif action == "close":
             if poll.status != Poll.Status.OPEN:
                 raise ValueError("Only open polls can be closed.")
